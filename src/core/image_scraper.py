@@ -6,12 +6,10 @@ import time
 from PIL import Image
 from io import BytesIO
 from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from webdriver_manager.chrome import ChromeDriverManager
 import concurrent.futures
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from urllib.parse import urlparse
@@ -56,7 +54,7 @@ class ImageScraper:
         try:
             self.log("Configuring Chrome WebDriver...", "info")
             chrome_options = Options()
-            chrome_options.add_argument('--headless')
+            chrome_options.add_argument('--headless=new')  # Updated headless argument
             chrome_options.add_argument('--disable-gpu')
             chrome_options.add_argument('--no-sandbox')
             chrome_options.add_argument('--disable-dev-shm-usage')
@@ -74,9 +72,12 @@ class ImageScraper:
             user_agent = random.choice(self.get_headers(url)['User-Agent'])
             chrome_options.add_argument(f'--user-agent={user_agent}')
             
-            self.log("Initializing Chrome WebDriver...", "info")
-            service = Service(ChromeDriverManager().install())
-            driver = webdriver.Chrome(service=service, options=chrome_options)
+            try:
+                self.log("Initializing Chrome WebDriver...", "info")
+                driver = webdriver.Chrome(options=chrome_options)
+            except Exception as e:
+                self.log(f"Error initializing Chrome WebDriver: {str(e)}", "error")
+                raise Exception("Failed to initialize Chrome WebDriver. Please make sure Chrome browser is installed.")
             
             driver.set_page_load_timeout(20)
             driver.implicitly_wait(5)
@@ -262,7 +263,7 @@ class ImageScraper:
         self.log(f"Filtering complete. Found {len(filtered_sources)} matching images", "info")
         return filtered_sources
 
-    def download_images(self, save_location, allowed_types=None, progress_callback=None):
+    def download_images(self, save_location, allowed_types=None, progress_callback=None, min_size=0, max_size=float('inf')):
         """Download all filtered images to the specified location"""
         if not self.image_sources:
             self.log("No images to download", "error")
@@ -280,6 +281,7 @@ class ImageScraper:
         self.is_downloading = True
         downloaded = 0
         failed = 0
+        skipped = 0
         
         session = requests.Session()
         adapter = requests.adapters.HTTPAdapter(
@@ -304,7 +306,9 @@ class ImageScraper:
                 domain_futures = [
                     executor.submit(
                         self._download_single_image_with_retry, 
-                        session, url, save_location, idx, 
+                        session, url, save_location, idx,
+                        min_size=min_size,
+                        max_size=max_size,
                         max_retries=3,  
                         initial_timeout=15  
                     )
@@ -314,35 +318,38 @@ class ImageScraper:
             
             for future in as_completed(futures):
                 try:
-                    success, _ = future.result()
-                    if success:
-                        downloaded += 1
+                    result, status = future.result()
+                    if result:
+                        if status == "downloaded":
+                            downloaded += 1
+                        elif status == "skipped":
+                            skipped += 1
                     else:
                         failed += 1
                         
                     if progress_callback:
-                        progress = (downloaded + failed) * 100 // total_images
+                        progress = (downloaded + failed + skipped) * 100 // total_images
                         progress_callback(progress)
                         
                 except Exception as e:
                     failed += 1
                     self.log(f"Unexpected error during download: {str(e)}", "error")
                     if progress_callback:
-                        progress = (downloaded + failed) * 100 // total_images
+                        progress = (downloaded + failed + skipped) * 100 // total_images
                         progress_callback(progress)
         
         self.is_downloading = False
         if progress_callback:
             progress_callback(100)
-        self.log(f"Download complete. Successfully downloaded: {downloaded}, Failed: {failed}", "info")
+        self.log(f"Download complete. Successfully downloaded: {downloaded}, Skipped (size filter): {skipped}, Failed: {failed}", "info")
 
-    def _download_single_image_with_retry(self, session, img_url, save_location, idx, max_retries=3, initial_timeout=15):
+    def _download_single_image_with_retry(self, session, img_url, save_location, idx, min_size=0, max_size=float('inf'), max_retries=3, initial_timeout=15):
         """Download a single image with optimized retry logic"""
         timeout = initial_timeout
         
         for attempt in range(max_retries):
             try:
-                return self._download_single_image(session, img_url, save_location, idx, timeout)
+                return self._download_single_image(session, img_url, save_location, idx, timeout, min_size, max_size)
             except (requests.exceptions.ReadTimeout, requests.exceptions.ConnectionError) as e:
                 if attempt == max_retries - 1:
                     self.log(f"Failed to download image {idx} after {max_retries} attempts: {str(e)}", "error")
@@ -354,7 +361,7 @@ class ImageScraper:
                 self.log(f"Error downloading image {idx}: {str(e)}", "error")
                 return False, None
 
-    def _download_single_image(self, session, img_url, save_location, idx, timeout):
+    def _download_single_image(self, session, img_url, save_location, idx, timeout, min_size=0, max_size=float('inf')):
         """Download a single image with the specified timeout"""
         try:
             if img_url.startswith('//'):
@@ -418,13 +425,25 @@ class ImageScraper:
             
             # Download with progress tracking
             with open(filepath, 'wb') as f:
+                total_size = 0
                 for chunk in response.iter_content(chunk_size=8192):
                     if not self.is_downloading:
                         return False, None
                     if chunk:
+                        total_size += len(chunk)
+                        if total_size > max_size:
+                            os.remove(filepath)  # Clean up partial file
+                            self.log(f"Skipping image {idx} - too large ({total_size} bytes)", "info")
+                            return True, "skipped"
                         f.write(chunk)
-            
-            return True, filename
+                
+                if total_size < min_size:
+                    os.remove(filepath)  # Clean up file that's too small
+                    self.log(f"Skipping image {idx} - too small ({total_size} bytes)", "info")
+                    return True, "skipped"
+                
+                self.log(f"Successfully downloaded image {idx} ({total_size} bytes)", "success")
+                return True, "downloaded"
             
         except requests.exceptions.RequestException as e:
             self.log(f"Request failed for image {idx}: {str(e)}", "error")

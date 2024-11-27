@@ -406,12 +406,13 @@ class ModernImageScraperApp:
         
     def toggle_theme(self):
         """Toggle between light and dark mode"""
-        if self.window.get_appearance_mode() == "Dark":
-            self.window.set_appearance_mode("light")
-            self.theme_switch.configure(text="☀️")  # Sun emoji for light mode switch
+        current_mode = ctk.get_appearance_mode()
+        if current_mode == "Dark":
+            ctk.set_appearance_mode("Light")
+            self.theme_switch.configure(text="☀️")  # Sun emoji for light mode
         else:
-            self.window.set_appearance_mode("dark")
-            self.theme_switch.configure(text="🌙")  # Moon emoji for dark mode switch
+            ctk.set_appearance_mode("Dark")
+            self.theme_switch.configure(text="🌙")  # Moon emoji for dark mode
             
     def browse_location(self):
         folder = filedialog.askdirectory()

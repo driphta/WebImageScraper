@@ -64,55 +64,38 @@ class ModernImageScraperApp:
         self.create_advanced_settings()
         
     def create_header(self):
-        header_frame = ctk.CTkFrame(self.main_container, fg_color="transparent")
-        header_frame.pack(fill="x", pady=(0, 4))  # Reduced bottom padding
+        """Create the header section with title and theme switch"""
+        header_frame = ctk.CTkFrame(self.window)
+        header_frame.pack(fill="x", padx=20, pady=(20, 0))
         
-        # Left side - Title and subtitle
-        title_frame = ctk.CTkFrame(header_frame, fg_color="transparent")
-        title_frame.pack(side="left", anchor="w")
-        
+        # Title
         title = ctk.CTkLabel(
-            title_frame,
+            header_frame,
             text="Web Image Scraper",
             font=ctk.CTkFont(size=24, weight="bold")
         )
-        title.pack(anchor="w")
+        title.pack(side="left", padx=10)
         
-        subtitle = ctk.CTkLabel(
-            title_frame,
-            text="Download images from any website",
-            font=ctk.CTkFont(size=12)
+        # Theme switch
+        self.theme_switch = ctk.CTkButton(
+            header_frame,
+            text="🌙",  # Moon emoji for dark mode
+            width=30,
+            command=self.toggle_theme
         )
-        subtitle.pack(anchor="w")
-        
-        # Right side - Theme toggle and Advanced toggle
-        toggle_frame = ctk.CTkFrame(header_frame, fg_color="transparent")
-        toggle_frame.pack(side="right", anchor="e")
+        self.theme_switch.pack(side="right", padx=10)
         
         # Advanced Settings Switch
-        self.advanced_label = ctk.CTkLabel(toggle_frame, text="Advanced")
-        self.advanced_label.pack(side="left", padx=(0, 5))
+        self.advanced_label = ctk.CTkLabel(header_frame, text="Advanced")
+        self.advanced_label.pack(side="right", padx=(0, 5))
         
         self.advanced_switch = ctk.CTkSwitch(
-            toggle_frame,
+            header_frame,
             text="",
             command=self.toggle_advanced_panel,
             width=40
         )
-        self.advanced_switch.pack(side="left", padx=(0, 20))
-        
-        # Theme Switch
-        self.theme_label = ctk.CTkLabel(toggle_frame, text="Dark Mode")
-        self.theme_label.pack(side="left", padx=(0, 5))
-        
-        self.theme_switch = ctk.CTkSwitch(
-            toggle_frame,
-            text="",
-            command=self.toggle_theme,
-            width=40
-        )
-        self.theme_switch.pack(side="left")
-        self.theme_switch.select()  # Dark mode by default
+        self.advanced_switch.pack(side="right", padx=(0, 20))
         
     def toggle_advanced_panel(self):
         if self.right_pane.winfo_ismapped():
@@ -410,9 +393,14 @@ class ModernImageScraperApp:
         self.console.see("end")
         
     def toggle_theme(self):
-        new_mode = self.theme_switch.get()
-        ctk.set_appearance_mode(new_mode)
-        
+        """Toggle between light and dark mode"""
+        if self.window.get_appearance_mode() == "Dark":
+            self.window.set_appearance_mode("light")
+            self.theme_switch.configure(text="☀️")  # Sun emoji for light mode switch
+        else:
+            self.window.set_appearance_mode("dark")
+            self.theme_switch.configure(text="🌙")  # Moon emoji for dark mode switch
+            
     def browse_location(self):
         folder = filedialog.askdirectory()
         if folder:

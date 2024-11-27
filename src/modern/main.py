@@ -20,12 +20,22 @@ class ModernImageScraperApp:
         self.window.title("Web Image Scraper - Modern UI")
         self.window.geometry("1200x800")
         
-        # Initialize scraper
-        self.scraper = ImageScraper(self.log_message)
+        # Initialize scraper with callbacks
+        self.scraper = ImageScraper(
+            log_callback=self.log_message,
+            progress_callback=self.update_progress
+        )
+        
+        # Track state
+        self.last_url = None
+        self.total_images = 0
+        self.download_thread = None
+        
+        # Create main layout
         self.setup_ui()
         
     def setup_ui(self):
-        # Create main container with padding
+        # Create main container
         self.main_container = ctk.CTkFrame(self.window)
         self.main_container.pack(fill="both", expand=True, padx=20, pady=20)
         
@@ -36,28 +46,21 @@ class ModernImageScraperApp:
         self.create_panes()
         
     def create_panes(self):
-        # Create paned window for left and right sections
-        self.paned_window = ctk.CTkFrame(self.main_container)
-        self.paned_window.pack(fill="both", expand=True, pady=(20, 0))
+        # Create left pane
+        self.left_pane = ctk.CTkFrame(self.main_container)
+        self.left_pane.pack(side="left", fill="both", expand=True)
         
-        # Left pane - Main controls
-        self.left_pane = ctk.CTkFrame(self.paned_window)
-        self.left_pane.pack(side="left", fill="both", expand=True, padx=(0, 10))
+        # Create right pane (advanced settings)
+        self.right_pane = ctk.CTkFrame(self.main_container)
+        self.right_pane.pack_forget()  # Hide initially
         
         # URL Input Section
         self.create_url_section()
         
-        # Settings Section
-        self.create_settings_section()
-        
         # Console Output
         self.create_console()
         
-        # Right pane - Advanced settings
-        self.right_pane = ctk.CTkFrame(self.paned_window)
-        self.right_pane.pack(side="right", fill="both", padx=(10, 0))
-        
-        # Advanced Settings
+        # Create advanced settings content
         self.create_advanced_settings()
         
     def create_header(self):
@@ -66,37 +69,57 @@ class ModernImageScraperApp:
         
         # Left side - Title and subtitle
         title_frame = ctk.CTkFrame(header_frame, fg_color="transparent")
-        title_frame.pack(side="left")
+        title_frame.pack(side="left", anchor="w")
         
         title = ctk.CTkLabel(
-            title_frame, 
+            title_frame,
             text="Web Image Scraper",
             font=ctk.CTkFont(size=24, weight="bold")
         )
-        title.pack(side="top", anchor="w")
+        title.pack(anchor="w")
         
         subtitle = ctk.CTkLabel(
             title_frame,
             text="Download images from any website",
-            font=ctk.CTkFont(size=14),
-            text_color="gray"
+            font=ctk.CTkFont(size=12)
         )
-        subtitle.pack(side="top", anchor="w", pady=(0, 0))  # Reduced bottom padding
+        subtitle.pack(anchor="w")
         
-        # Right side - Theme toggle
-        theme_frame = ctk.CTkFrame(header_frame, fg_color="transparent")
-        theme_frame.pack(side="right")
+        # Right side - Theme toggle and Advanced toggle
+        toggle_frame = ctk.CTkFrame(header_frame, fg_color="transparent")
+        toggle_frame.pack(side="right", anchor="e")
+        
+        # Advanced Settings Switch
+        self.advanced_label = ctk.CTkLabel(toggle_frame, text="Advanced")
+        self.advanced_label.pack(side="left", padx=(0, 5))
+        
+        self.advanced_switch = ctk.CTkSwitch(
+            toggle_frame,
+            text="",
+            command=self.toggle_advanced_panel,
+            width=40
+        )
+        self.advanced_switch.pack(side="left", padx=(0, 20))
+        
+        # Theme Switch
+        self.theme_label = ctk.CTkLabel(toggle_frame, text="Dark Mode")
+        self.theme_label.pack(side="left", padx=(0, 5))
         
         self.theme_switch = ctk.CTkSwitch(
-            theme_frame,
-            text="Dark Mode",
+            toggle_frame,
+            text="",
             command=self.toggle_theme,
-            onvalue="dark",
-            offvalue="light"
+            width=40
         )
-        self.theme_switch.select() if ctk.get_appearance_mode() == "dark" else self.theme_switch.deselect()
-        self.theme_switch.pack(side="right", padx=10)
+        self.theme_switch.pack(side="left")
+        self.theme_switch.select()  # Dark mode by default
         
+    def toggle_advanced_panel(self):
+        if self.right_pane.winfo_ismapped():
+            self.right_pane.pack_forget()
+        else:
+            self.right_pane.pack(side="right", fill="y", padx=(20, 0))
+            
     def create_url_section(self):
         url_frame = ctk.CTkFrame(self.left_pane)
         url_frame.pack(fill="x", pady=(0, 20))
@@ -180,33 +203,6 @@ class ModernImageScraperApp:
         self.progress_bar.pack(fill="x")
         self.progress_bar.set(0)
         
-    def create_settings_section(self):
-        self.settings_frame = ctk.CTkFrame(self.left_pane)
-        self.settings_frame.pack(fill="x", pady=(0, 20))
-        
-        # File types section
-        types_label = ctk.CTkLabel(
-            self.settings_frame,
-            text="Image Types",
-            font=ctk.CTkFont(size=14, weight="bold")
-        )
-        types_label.pack(anchor="w", pady=(10, 5))
-        
-        # Checkboxes for file types in one row
-        self.file_types = {}
-        types_frame = ctk.CTkFrame(self.settings_frame, fg_color="transparent")
-        types_frame.pack(fill="x", pady=(0, 10))
-        
-        for i, type_name in enumerate(['JPG/JPEG', 'PNG', 'SVG', 'WebP']):
-            var = ctk.BooleanVar(value=True)
-            self.file_types[type_name] = var
-            checkbox = ctk.CTkCheckBox(
-                types_frame,
-                text=type_name,
-                variable=var
-            )
-            checkbox.grid(row=0, column=i, padx=10, pady=5, sticky="w")
-            
     def create_console(self):
         console_frame = ctk.CTkFrame(self.left_pane)
         console_frame.pack(fill="both", expand=True)
@@ -232,64 +228,176 @@ class ModernImageScraperApp:
             text="Advanced Settings",
             font=ctk.CTkFont(size=16, weight="bold")
         )
-        advanced_label.pack(anchor="w", pady=(10, 20))
+        advanced_label.pack(anchor="w", pady=(0, 20))
+        
+        # File types section
+        types_label = ctk.CTkLabel(
+            self.right_pane,
+            text="Image Types",
+            font=ctk.CTkFont(size=14, weight="bold")
+        )
+        types_label.pack(anchor="w", pady=(0, 5))
+        
+        # Checkboxes for file types
+        types_frame = ctk.CTkFrame(self.right_pane)
+        types_frame.pack(fill="x", pady=(0, 20))
+        
+        self.file_types = {}
+        for type_name in ['JPG/JPEG', 'PNG', 'SVG', 'WebP']:
+            var = ctk.BooleanVar(value=True)
+            self.file_types[type_name] = var
+            checkbox = ctk.CTkCheckBox(
+                types_frame,
+                text=type_name,
+                variable=var
+            )
+            checkbox.pack(anchor="w", padx=10, pady=5)
         
         # Size Filters
-        size_frame = ctk.CTkFrame(self.right_pane)
-        size_frame.pack(fill="x", pady=(0, 10))
-        
         size_label = ctk.CTkLabel(
-            size_frame,
+            self.right_pane,
             text="Size Filters (KB)",
-            font=ctk.CTkFont(size=14)
+            font=ctk.CTkFont(size=14, weight="bold")
         )
-        size_label.pack(anchor="w", pady=(5, 10))
+        size_label.pack(anchor="w", pady=(0, 5))
+        
+        size_frame = ctk.CTkFrame(self.right_pane)
+        size_frame.pack(fill="x", pady=(0, 20))
         
         # Min size
         min_frame = ctk.CTkFrame(size_frame, fg_color="transparent")
         min_frame.pack(fill="x", pady=5)
         
-        ctk.CTkLabel(min_frame, text="Min:").pack(side="left")
-        self.min_size = ctk.CTkEntry(min_frame, width=100)
+        ctk.CTkLabel(min_frame, text="Min:").pack(side="left", padx=10)
+        self.min_size = ctk.CTkEntry(
+            min_frame,
+            width=100,
+            placeholder_text="0"
+        )
         self.min_size.pack(side="left", padx=10)
         
         # Max size
         max_frame = ctk.CTkFrame(size_frame, fg_color="transparent")
         max_frame.pack(fill="x", pady=5)
         
-        ctk.CTkLabel(max_frame, text="Max:").pack(side="left")
-        self.max_size = ctk.CTkEntry(max_frame, width=100)
+        ctk.CTkLabel(max_frame, text="Max:").pack(side="left", padx=10)
+        self.max_size = ctk.CTkEntry(
+            max_frame,
+            width=100,
+            placeholder_text="No limit"
+        )
         self.max_size.pack(side="left", padx=10)
         
     def check_images(self):
-        url = self.url_entry.get()
+        url = self.url_entry.get().strip()
         if not url:
-            self.log_message("Please enter a valid URL", "error")
+            self.log_message("Please enter a website URL", "error")
             return
             
-        if not url.startswith(('http://', 'https://')):
-            url = 'https://' + url
-            
+        # Disable UI elements
         self.check_button.configure(state="disabled")
+        self.url_entry.configure(state="disabled")
+        self.log_message("Checking website for images...", "info")
         
-        def scan_thread():
+        def check_thread():
             try:
-                image_count = self.scraper.scan_webpage(url)
-                self.window.after(0, lambda: self._after_scan(image_count))
+                # Only scan if URL has changed
+                if url != self.last_url:
+                    self.total_images = self.scraper.scan_webpage(url)
+                    self.last_url = url
+                
+                if self.total_images > 0:
+                    self.log_message(f"Found {self.total_images} images on the website", "success")
+                    self.download_button.configure(state="normal")
+                else:
+                    self.log_message("No images found on the website", "warning")
+                    self.download_button.configure(state="disabled")
+                    
             except Exception as e:
-                self.window.after(0, lambda: self.log_message(f"Error scanning webpage: {str(e)}", "error"))
-                self.window.after(0, lambda: self._after_scan(0))
+                self.log_message(f"Error checking website: {str(e)}", "error")
+                self.download_button.configure(state="disabled")
+            finally:
+                # Re-enable UI elements
+                self.check_button.configure(state="normal")
+                self.url_entry.configure(state="normal")
         
-        threading.Thread(target=scan_thread, daemon=True).start()
+        # Start check in separate thread
+        threading.Thread(target=check_thread, daemon=True).start()
         
-    def _after_scan(self, image_count):
-        self.check_button.configure(state="normal")
-        if image_count > 0:
-            self.log_message(f"Found {image_count} images", "success")
-            self.download_button.configure(state="normal")
-        else:
-            self.log_message("No images found", "warning")
+    def start_download(self):
+        url = self.url_entry.get().strip()
+        save_location = self.location_entry.get().strip()
+        
+        if not url:
+            self.log_message("Please enter a website URL", "error")
+            return
             
+        if not save_location:
+            self.log_message("Please select a save location", "error")
+            return
+            
+        if not os.path.exists(save_location):
+            try:
+                os.makedirs(save_location)
+            except Exception as e:
+                self.log_message(f"Error creating save directory: {str(e)}", "error")
+                return
+        
+        # Get selected file types
+        allowed_types = []
+        for file_type, var in self.file_types.items():
+            if var.get():
+                if file_type == 'JPG/JPEG':
+                    allowed_types.extend(['jpg', 'jpeg'])
+                else:
+                    allowed_types.append(file_type.lower())
+                    
+        if not allowed_types:
+            self.log_message("Please select at least one file type", "error")
+            return
+            
+        # Get size filters
+        try:
+            min_size = int(self.min_size.get() or 0) * 1024  # Convert to bytes
+            max_size = int(self.max_size.get() or 0) * 1024  # Convert to bytes
+            if max_size == 0:
+                max_size = float('inf')
+        except ValueError:
+            self.log_message("Please enter valid numbers for size filters", "error")
+            return
+        
+        # Update UI
+        self.download_button.configure(state="disabled")
+        self.check_button.configure(state="disabled")
+        self.url_entry.configure(state="disabled")
+        self.location_entry.configure(state="disabled")
+        self.progress_label.configure(text="Downloading...")
+        self.progress_bar.set(0)
+        
+        def download_thread():
+            try:
+                # Start download using existing scan results
+                self.scraper.start_download(
+                    url=url,
+                    save_location=save_location,
+                    allowed_types=allowed_types,
+                    min_size=min_size,
+                    max_size=max_size
+                )
+            except Exception as e:
+                self.log_message(f"Error during download: {str(e)}", "error")
+            finally:
+                # Reset UI
+                self.download_button.configure(state="normal")
+                self.check_button.configure(state="normal")
+                self.url_entry.configure(state="normal")
+                self.location_entry.configure(state="normal")
+                self.progress_label.configure(text="")
+                self.progress_bar.set(0)
+        
+        # Start download in separate thread
+        threading.Thread(target=download_thread, daemon=True).start()
+        
     def log_message(self, message, level="info"):
         color_map = {
             "error": "red",
@@ -311,69 +419,8 @@ class ModernImageScraperApp:
             self.location_entry.delete(0, "end")
             self.location_entry.insert(0, folder)
             
-    def start_download(self):
-        if not self.location_entry.get():
-            self.log_message("Please select a download location", "error")
-            return
-            
-        # Get selected file types
-        allowed_types = []
-        for file_type, var in self.file_types.items():
-            if var.get():
-                if file_type == 'JPG/JPEG':
-                    allowed_types.extend(['jpg', 'jpeg'])
-                else:
-                    allowed_types.append(file_type.lower())
-                    
-        if not allowed_types:
-            self.log_message("Please select at least one file type", "error")
-            return
-            
-        # Get size filters
-        try:
-            min_size = int(self.min_size.get()) if self.min_size.get() else 0
-            max_size = int(self.max_size.get()) if self.max_size.get() else float('inf')
-        except ValueError:
-            self.log_message("Please enter valid numbers for size filters", "error")
-            return
-            
-        self.download_button.configure(state="disabled")
-        self.check_button.configure(state="disabled")
-        self.progress_label.configure(text="Downloading...")
-        
-        def update_progress(value):
-            self.window.after(0, lambda: self._update_progress(value))
-            
-        def download_thread():
-            error_message = None
-            try:
-                self.scraper.download_images(
-                    self.location_entry.get(),
-                    allowed_types,
-                    update_progress,
-                    min_size=min_size,
-                    max_size=max_size
-                )
-            except Exception as e:
-                error_message = str(e)
-            finally:
-                def cleanup():
-                    if error_message:
-                        self.log_message(f"Error during download: {error_message}", "error")
-                    self._after_download()
-                self.window.after(0, cleanup)
-                
-        threading.Thread(target=download_thread, daemon=True).start()
-        
-    def _update_progress(self, value):
-        self.progress_bar.set(value / 100)
-        self.progress_label.configure(text=f"Downloading... {int(value)}%")
-        
-    def _after_download(self):
-        self.download_button.configure(state="normal")
-        self.check_button.configure(state="normal")
-        self.progress_label.configure(text="Ready")
-        self.progress_bar.set(0)
+    def update_progress(self, progress):
+        self.progress_bar.set(progress)
         
     def run(self):
         self.window.mainloop()

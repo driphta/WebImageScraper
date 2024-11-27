@@ -35,13 +35,56 @@ class ModernImageScraperApp:
         self.setup_ui()
         
     def setup_ui(self):
-        # Create main container
+        """Setup the main UI components"""
+        # Create header first
+        self.create_header()
+        
+        # Main container for content
         self.main_container = ctk.CTkFrame(self.window)
         self.main_container.pack(fill="both", expand=True, padx=20, pady=20)
         
-        # Header with theme toggle
-        self.create_header()
+        # Create main content area
+        self.create_main_content()
         
+        # Create right panel for advanced settings
+        self.create_right_panel()
+        
+    def create_header(self):
+        """Create the header section with title and theme switch"""
+        header_frame = ctk.CTkFrame(self.window, fg_color="transparent")
+        header_frame.pack(fill="x", padx=20, pady=(20, 0))
+        
+        # Left side - Title
+        title = ctk.CTkLabel(
+            header_frame,
+            text="Web Image Scraper",
+            font=ctk.CTkFont(size=24, weight="bold")
+        )
+        title.pack(side="left", padx=10)
+        
+        # Right side - Controls
+        controls_frame = ctk.CTkFrame(header_frame, fg_color="transparent")
+        controls_frame.pack(side="right", padx=10)
+        
+        # Theme switch
+        self.theme_switch = ctk.CTkButton(
+            controls_frame,
+            text="🌙",  # Moon emoji for dark mode
+            width=30,
+            command=self.toggle_theme
+        )
+        self.theme_switch.pack(side="right", padx=5)
+        
+        # Advanced Settings Switch
+        self.advanced_switch = ctk.CTkSwitch(
+            controls_frame,
+            text="Advanced",
+            command=self.toggle_advanced_panel,
+            width=40
+        )
+        self.advanced_switch.pack(side="right", padx=10)
+        
+    def create_main_content(self):
         # Create left and right panes
         self.create_panes()
         
@@ -63,46 +106,9 @@ class ModernImageScraperApp:
         # Create advanced settings content
         self.create_advanced_settings()
         
-    def create_header(self):
-        """Create the header section with title and theme switch"""
-        header_frame = ctk.CTkFrame(self.window)
-        header_frame.pack(fill="x", padx=20, pady=(20, 0))
+    def create_right_panel(self):
+        pass
         
-        # Title
-        title = ctk.CTkLabel(
-            header_frame,
-            text="Web Image Scraper",
-            font=ctk.CTkFont(size=24, weight="bold")
-        )
-        title.pack(side="left", padx=10)
-        
-        # Theme switch
-        self.theme_switch = ctk.CTkButton(
-            header_frame,
-            text="🌙",  # Moon emoji for dark mode
-            width=30,
-            command=self.toggle_theme
-        )
-        self.theme_switch.pack(side="right", padx=10)
-        
-        # Advanced Settings Switch
-        self.advanced_label = ctk.CTkLabel(header_frame, text="Advanced")
-        self.advanced_label.pack(side="right", padx=(0, 5))
-        
-        self.advanced_switch = ctk.CTkSwitch(
-            header_frame,
-            text="",
-            command=self.toggle_advanced_panel,
-            width=40
-        )
-        self.advanced_switch.pack(side="right", padx=(0, 20))
-        
-    def toggle_advanced_panel(self):
-        if self.right_pane.winfo_ismapped():
-            self.right_pane.pack_forget()
-        else:
-            self.right_pane.pack(side="right", fill="y", padx=(20, 0))
-            
     def create_url_section(self):
         url_frame = ctk.CTkFrame(self.left_pane)
         url_frame.pack(fill="x", pady=(0, 20))
@@ -271,6 +277,12 @@ class ModernImageScraperApp:
         )
         self.max_size.pack(side="left", padx=10)
         
+    def toggle_advanced_panel(self):
+        if self.right_pane.winfo_ismapped():
+            self.right_pane.pack_forget()
+        else:
+            self.right_pane.pack(side="right", fill="y", padx=(20, 0))
+            
     def check_images(self):
         url = self.url_entry.get().strip()
         if not url:
